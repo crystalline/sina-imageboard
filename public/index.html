@@ -1,9 +1,37 @@
+<!DOCTYPE html>
 <html>
 	<head>
-	    <title>Rubychan</title>
+	    <title>Aurelia</title>
+	    <style>
+   		body {
+		    background-image: url("/bg_web.jpg");
+    		background-color: #1c3170;
+    		background-repeat: no-repeat;
+    		background-size: auto;
+    		background-position: center;
+			text-align: center;
+  		}
+  		div.vcenter {
+		  margin-left: auto;
+		  margin-right: auto;
+		  width: 800px;
+		  min-height: 480px;
+		}
+		a.enter {
+			 font-size:40px;
+			 font-style: italic;
+			 color: #002E4C;
+			 text-shadow: 0 0 10px #1A1A80;
+		}
+		a.enter:hover {
+			 text-shadow: 0 0 50px #3399FF;
+		}
+  </style>
 	</head>
 	<body>
-	<center><h1>Hello!</h1></center>
-	<center><a href='/board' style='font-size:40px'>Aurelia imageboard</a></center>
+	<div class='vcenter'>
+		<p style='font-size:120px; font-style: italic; color: #002E4C; text-shadow: 0 0 20px #5555FF';>Aurelia Azurea<p><br>
+		<a href='/board' class='enter'>Enter</a>
+	</div>
 	</body>
 </html>
