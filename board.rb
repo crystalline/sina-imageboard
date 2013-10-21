@@ -30,6 +30,10 @@ $db = mc.db($db_name)
 #   );
 #end
 
+def parse_user_text(str)
+	str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>')
+end
+
 class Board < Sinatra::Base
 	
 #	get '/board' do
@@ -58,7 +62,7 @@ class Board < Sinatra::Base
 									<div class='post'>
 										<b>
 										   <%= post['name'] %>
-										   <%= post['created_at'].ctime %>
+										   \| <%= post['created_at'].ctime %>
 										</b>
 										<div class='post_txt'><%= post['msg'] %></div>
 									</div>
@@ -129,8 +133,8 @@ class Board < Sinatra::Base
 									<div class='head_post'>
 										<b>
 								   		<%= first_post['name'] %>
-								   		<%= first_post['created_at'].ctime %>
-								   		<a href=/board/thread/<%= tid %>>Reply</a>
+								   		\| <%= first_post['created_at'].ctime %>
+								   		\| <a href=/board/thread/<%= tid %>>\[Reply\]</a>
 										</b>
 									<div class='post_txt'><%= first_post['msg'] %></div>
 									</div>
@@ -141,7 +145,7 @@ class Board < Sinatra::Base
 											<div class='post'>
 												<b>
 												   <%= post['name'] %>
-												   <%= post['created_at'].ctime %>
+												   \| <%= post['created_at'].ctime %>
 												</b>
 												<div class='post_txt'><%= post['msg'] %></div>
 											</div>
@@ -210,9 +214,9 @@ class Board < Sinatra::Base
 		
 		#Create new post document
 		$db['posts'].insert(
-		  :name      => params[:name],
-		  :msg       => params[:msg],
-		  :email     => params[:email],
+		  :name      => parse_user_text(params[:name]),
+		  :msg       => parse_user_text(params[:msg]),
+		  :email     => parse_user_text(params[:email]),
 		  :created_at => t,
 		  :tid => BSON::ObjectId.from_string(tid)
 		)
@@ -237,14 +241,15 @@ class Board < Sinatra::Base
 		puts "[New thread #{t}]"
 		
 		tid = $db['threads'].insert(
-		  :created_at => t
+		  :created_at => t,
+		  :last_post => t
 		)
 		
 		#Create new post document
 		$db['posts'].insert(
-		  :name      => params[:name],
-		  :msg       => params[:msg],
-		  :email     => params[:email],
+		  :name      => parse_user_text(params[:name]),
+		  :msg       => parse_user_text(params[:msg]),
+		  :email     => parse_user_text(params[:email]),
 		  :created_at => t,
 		  :tid => tid
 		)
