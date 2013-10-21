@@ -50,9 +50,46 @@ class Board < Sinatra::Base
 	end
 	
 	get '/board' do
-	  threads = $db['threads'].find.to_a
-	  first_posts = threads.map do |thread| $db['posts'].find(:tid => thread['_id']) end
-	  erb "<html>
+		
+		threads = $db['threads'].find.to_a.map do |thread|
+			[ thread, $db['posts'].find(:tid => thread['_id']).to_a ]
+		end
+		
+		threads = threads.select {|x| x[1].size > 0}
+		
+		thread_html = ""
+	  
+		for thread in threads
+
+			posts = thread[1]
+			first_post = posts[0]
+
+			thread_html += (erb("<tr><td>
+									<div class='head_post'>
+										<b>
+								   		<%= first_post['name'] %>
+								   		<%= first_post['created_at'].ctime %>
+								   		&nbsp
+										</b>
+									<div class='post_txt'><%= first_post['msg'] %></div>
+									</div>
+									</td></tr>", :locals => {:first_post => first_post}))
+			if posts.size > 1 then
+				for post in posts[1, posts.size-1]
+					thread_html += (erb("<tr><td>
+											<div class='post'>
+												<b>
+												   <%= post['name'] %>
+												   <%= post['created_at'].ctime %>
+												</b>
+												<div class='post_txt'><%= post['msg'] %></div>
+											</div>
+											</td></tr>", :locals => {:post => post}))
+				end
+			end
+		end
+
+		code = "<html>
 				<head>
 					<title>Rubychan</title>
 					<link href='/ice.css' type='text/css' rel='stylesheet'/>
@@ -68,43 +105,28 @@ class Board < Sinatra::Base
 			<form name='input' action='newthread' method='post'>
 				<table id='inptab'>
 				<tr>
-				    <td>Name</td>
-				    <td><input class='txtin' type='text' name='name' ></td>
+					<td>Name</td>
+					<td><input class='txtin' type='text' name='name' ></td>
 				</tr>
 				<tr>
-				    <td>Email</td>
-				    <td><input class='txtin' type='text' name='email' ></td>
+					<td>Email</td>
+					<td><input class='txtin' type='text' name='email' ></td>
 				</tr>
 				<tr>
-				    <td>Message</td>
-				    <td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
+					<td>Message</td>
+					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
 				</tr>
 				<tr>
-				    <td>Captcha</td>
-				    <td><input class='txtin' type='text' name='captcha'></td>
+					<td>Captcha</td>
+					<td><input class='txtin' type='text' name='captcha'></td>
 				</tr>
 				</table>
 				<input class='button' type='submit' value='Submit'>
 			</form>
 			</center>
 			</div>
-			<table>
-				<% $db['threads'].find.each do |thread| %>
-					<% $db['posts'].find('tid' => thread['_id']).each do |post| %>
-					<tr><td>
-						<div class='post'>
-							<b>
-							   <%= post['name'] %>
-							   <%= post['created_at'].ctime %>
-							</b>
-							<div class='post_txt'><%= post['msg'] %></div>
-						</div>
-					</td></tr>
-					<% end %>
-				<% end %>
-			</table>
-			</body>
-			</html>"
+			<table>" + thread_html +  "</table></body></html>"
+		erb code
 	end
 	
 	post '/newthread' do
