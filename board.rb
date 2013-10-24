@@ -2,14 +2,18 @@
 require 'sinatra'
 require 'shotgun'
 require 'mongo'
-
+require 'RMagick'
+require 'digest/md5'
+require 'fileutils'
 include Mongo
 
 #Global settings
 $default_name = 'Aurelian'
-$greeting = 'Aurelia unlimited'
 $db_name = 'board'
+$threads_per_page = 10
+$captcha_folder = 'public/captcha/'
 
+#Init db connection
 mc = MongoClient.new('localhost', 27017)
 
 #Init main db
@@ -29,6 +33,30 @@ $db = mc.db($db_name)
 #          }
 #   );
 #end
+
+#simple captcha generator
+#returns hashed captcha text
+def gen_captcha
+	captcha = ""
+	5.times { captcha << (rand(26)+65).chr }
+	hashed = Digest::MD5.hexdigest(captcha)
+	
+	canvas = Magick::Image.new(80,30, Magick::HatchFill.new('#ffffff','#0169e1'))
+
+	text = Magick::Draw.new
+	text.annotate(canvas,60,25,10,0,captcha) {
+		    self.fill = "#000000"
+		    self.stroke = "transparent"
+		    self.pointsize = 22
+		    self.font_weight = Magick::BoldWeight
+		    self.gravity = Magick::SouthGravity
+	}
+	
+	canvas = canvas.implode(-0.4)
+	canvas.write($captcha_folder+hashed+".jpg")
+	
+	return hashed
+end
 
 def parse_user_text(str)
 	str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>')
@@ -52,8 +80,24 @@ class Board < Sinatra::Base
 	get '/board/thread/:tid' do
 		
 		tid = params[:tid]
+		tid_bson = BSON::ObjectId.from_string(tid)
+		thread = $db['threads'].find_one(:_id => tid_bson)
 		
-		posts = $db['posts'].find(:tid => BSON::ObjectId.from_string(tid)).to_a
+		if not thread
+			redirect '/no_thread'
+		end
+		
+		thread_captcha = thread['captcha']
+		
+		#Regenerate captcha is necessary
+		if not thread_captcha
+			thread_captcha = gen_captcha()
+			$db['threads'].update({"_id" => tid_bson}, {"$set" => {"captcha" => thread_captcha}})
+		end
+		
+		thread_captcha_path = "/captcha/" + thread_captcha + ".jpg"
+		
+		posts = $db['posts'].find(:tid => tid_bson).to_a
 		
 		thread_html = ""
 		
@@ -100,17 +144,17 @@ class Board < Sinatra::Base
 				</tr>
 				<tr>
 					<td>Captcha</td>
-					<td><input class='txtin' type='text' name='captcha'></td>
+					<td><input id='captcha' type='text' name='captcha'>
+						<div style='float:right; padding-top:3px; padding-right: 60px;'><img src=<%= thread_captcha_path %>></img></div></td>
 				</tr>
 				</table>
 				<input class='button' type='submit' value='Submit'>
 			</form>
 			</center>
 			</div>
-			<table>", :locals => {:action => action}) + thread_html +  "</table></body></html>"
+			<table>", :locals => {:action => action, :thread_captcha_path => thread_captcha_path}) + thread_html + "</table></body></html>"
 			
 			erb code
-		
 	end
 	
 	get '/board' do
@@ -121,8 +165,16 @@ class Board < Sinatra::Base
 		
 		threads = threads.select {|x| x[1].size > 0}
 		
+	  	board_captcha = $db['global'].find_one({"board_captcha" => true})
+	  	#Regenerate captcha is necessary
+	  	if not board_captcha
+			board_captcha = gen_captcha()
+			$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
+		end
+		board_captcha_path = "/captcha/" + board_captcha["captcha"] + ".jpg"
+		
 		thread_html = ""
-	  
+	  	
 		for thread in threads
 
 			posts = thread[1]
@@ -154,7 +206,7 @@ class Board < Sinatra::Base
 			end
 		end
 
-		code = "<html>
+		code = erb("<html>
 				<head>
 					<title>Rubychan</title>
 					<link href='/ice.css' type='text/css' rel='stylesheet'/>
@@ -183,28 +235,50 @@ class Board < Sinatra::Base
 				</tr>
 				<tr>
 					<td>Captcha</td>
-					<td><input class='txtin' type='text' name='captcha'></td>
+					<td><input id='captcha' type='text' name='captcha'>
+						<div style='float:right; padding-top:3px; padding-right: 60px;'><img src=<%= board_captcha_path %>></img></div></td>
 				</tr>
 				</table>
 				<input class='button' type='submit' value='Submit'>
 			</form>
 			</center>
 			</div>
-			<table>" + thread_html +  "</table></body></html>"
+			<table>", :locals => {:board_captcha_path => board_captcha_path}) + thread_html +  "</table></body></html>"
 		erb code
 	end
 	
 	post '/board/thread/:tid/newpost' do
 		t = Time.now
 		
-		#puts params[:tid]
-		
+		#Check if post is empty
 		if params[:msg] == "" then
 		    puts "[Empty post #{t}]"
 		    redirect '/empty_post'
 		end
 		
-		if params[:name] == "" then
+		tid = params[:tid]
+		tid_bson = BSON::ObjectId.from_string(tid)
+		thread = $db['threads'].find_one(:_id => tid_bson)
+		thread_captcha = thread['captcha']
+		
+		#Verify captcha
+		if Digest::MD5.hexdigest(params[:captcha]) != thread_captcha
+			redirect '/wrong_captcha'
+		end
+		
+		#if verification is Ok then update captcha for thread:
+		thread_captcha_old = thread_captcha
+		
+		thread_captcha = gen_captcha()
+		$db['threads'].update({"_id" => tid_bson}, {"$set" => {"captcha" => thread_captcha}})
+		
+		#remove old captcha:
+		FileUtils.rm 'public/captcha/' + thread_captcha_old + '.jpg'
+		
+		#Update threads posting date
+		$db['threads'].update({"_id" => tid_bson}, {"$set" => {"last_post" => t}})
+		
+		if params[:name] == ""
 		    params[:name] = $default_name
 		end
 		
@@ -238,11 +312,28 @@ class Board < Sinatra::Base
 		    params[:name] = $default_name
 		end
 		
+		board_captcha = $db['global'].find_one({"board_captcha" => true})["captcha"]
+		
+		#Verify captcha
+		if Digest::MD5.hexdigest(params[:captcha]) != board_captcha
+			redirect '/wrong_captcha'
+		end
+		
+		#if verification is Ok then update captcha for board:
+		board_captcha_old = board_captcha
+		
+		board_captcha = gen_captcha()
+		$db['global'].update({"board_captcha" => true}, {"$set" => {"captcha" => board_captcha}})
+		
+		#remove old captcha:
+		FileUtils.rm 'public/captcha/' + board_captcha_old + '.jpg'
+		
 		puts "[New thread #{t}]"
 		
 		tid = $db['threads'].insert(
 		  :created_at => t,
-		  :last_post => t
+		  :last_post => t,
+		  :captcha => gen_captcha()
 		)
 		
 		#Create new post document
