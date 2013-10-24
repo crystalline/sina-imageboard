@@ -20,19 +20,21 @@ mc = MongoClient.new('localhost', 27017)
 $db = mc.db($db_name)
 
 #Create sequence marker if not present (to label posts in order)
-#if $db['seq'].find_all.to_a == [] then
-#	$db['seq'].insert('pid' => 1)
-#end
 
-#def get_next_id
-#	$db['seq'].findAndModify(
-#          {
-#            query: { _id: name },
-#            update: { $inc: { seq: 1 } },
-#            new: true
-#          }
-#   );
-#end
+counter = $db['global'].find_one("_id" => "counter")
+if not counter
+	$db['global'].insert("_id" => "counter", "counter" => 1)
+end
+
+def get_next_id
+	return $db['global'].find_and_modify(
+		{
+			"query" => { "_id" => "counter" },
+			"update" => { "$inc" => { "counter" => 1 } },
+			"new" => true
+		}
+	)
+end
 
 #simple captcha generator
 #returns hashed captcha text
@@ -159,7 +161,7 @@ class Board < Sinatra::Base
 	
 	get '/board' do
 		
-		threads = $db['threads'].find.to_a.map do |thread|
+		threads = $db['threads'].find.sort('last_post.to_a.map do |thread|
 			[ thread, $db['posts'].find(:tid => thread['_id']).to_a ]
 		end
 		

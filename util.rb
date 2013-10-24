@@ -39,6 +39,40 @@ def gen_captcha
 	return hashed
 end
 
+def rebuild_global
+	
+	counter = $db['global'].find_one("_id" => "counter")
+	if not counter
+		$db['global'].insert("_id" => "counter", "counter" => 1)
+	end
+	
+	rebuild_board_captcha()
+end
+
+def get_next_id
+	val = $db['global'].find_and_modify(
+		{
+			"query" => { "_id" => "counter" },
+			"update" => { "$inc" => { "counter" => 1 } },
+			"new" => true
+		}
+	)
+	
+	puts val.to_s
+	
+end
+
+def rebuild_board_captcha
+	board_captcha = $db['global'].find_one({"board_captcha" => true})
+	
+	if not board_captcha
+		board_captcha = gen_captcha()
+		$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
+	else
+		$db['global'].update({"board_captcha" => true}, {"$set" => {"captcha" => board_captcha}})
+	end
+end
+
 def rebuild_captcha
 	
 	puts 'Rebuilding captchas'
@@ -57,14 +91,7 @@ def rebuild_captcha
 		$db['threads'].update({"_id" => thr["_id"]}, {"$set" => {"captcha" => thread_captcha}})
 	end
 	
-	board_captcha = $db['global'].find_one({"board_captcha" => true})
-	
-	if not board_captcha
-		board_captcha = gen_captcha()
-		$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
-	else
-		$db['global'].update({"board_captcha" => true}, {"$set" => {"captcha" => board_captcha}})
-	end
+	rebuild_board_captcha()
 	
 	puts "Captcha rebuild complete"
 end
