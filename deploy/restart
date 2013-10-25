@@ -1,5 +1,6 @@
 #!/bin/sh
 touch tmp/restart.txt
 echo "Restarting unicorn"
+cd /apps/rubyboard
 cat tmp/pids/unicorn.pid | xargs kill -QUIT
 unicorn -c unicorn.rb -D

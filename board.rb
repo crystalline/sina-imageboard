@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 require 'sinatra'
-require 'shotgun'
 require 'mongo'
 require 'RMagick'
 require 'digest/md5'
