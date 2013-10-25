@@ -69,6 +69,7 @@ def rebuild_board_captcha
 		board_captcha = gen_captcha()
 		$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
 	else
+		board_captcha = gen_captcha()
 		$db['global'].update({"board_captcha" => true}, {"$set" => {"captcha" => board_captcha}})
 	end
 end

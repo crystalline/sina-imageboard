@@ -12,6 +12,7 @@ $default_name = 'Aurelian'
 $db_name = 'board'
 $threads_per_page = 10
 $captcha_folder = 'public/captcha/'
+$show_posts = 5
 
 #Init db connection
 mc = MongoClient.new('localhost', 27017)
@@ -64,20 +65,27 @@ def parse_user_text(str)
 	str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>')
 end
 
+def gen_page_bar
+	n = $db['threads'].count/$threads_per_page
+	hrefs = []
+	(0..n).each {|i| hrefs << "/board/page/#{i}"}
+	
+	ERB.new("<div id='page_bar'>
+		 <% for i in 0..n %>
+		 <a class='undec' href=<%= hrefs[i] %>>[<%= i %>]&nbsp</a>
+		 <% end %>
+		 </div>").result(binding)
+end
+
 class Board < Sinatra::Base
 	
-#	get '/board' do
-#		redirect '/board/0'
-#	end
+	get '/board' do
+		redirect '/board/page/0'
+	end
 	
 	get '/hello' do
 		'nyaaaaaaaaaaa'
 	end
-	
-#	get %r{/board/([\d]+)} do
-#		page = params[:captures].first
-#		"GET page #{page}"
-#	end
 	
 	get '/board/thread/:tid' do
 		
@@ -114,6 +122,8 @@ class Board < Sinatra::Base
 									</div>
 									</td></tr>", :locals => {:post => post}))
 		end
+		
+		thread_html = "<table>" + thread_html + "</table>"
 		
 		action = "/board/thread/#{tid}/newpost"
 		
@@ -153,16 +163,22 @@ class Board < Sinatra::Base
 				<input class='button' type='submit' value='Submit'>
 			</form>
 			</center>
-			</div>
-			<table>", :locals => {:action => action, :thread_captcha_path => thread_captcha_path}) + thread_html + "</table></body></html>"
+			</div>", :locals => {:action => action, :thread_captcha_path => thread_captcha_path}) + thread_html + "</body></html>"
 			
 			erb code
 	end
 	
-	get '/board' do
+	get %r{/board/page/([\d]+)} do
 		
-		threads = $db['threads'].find.sort('last_post.to_a.map do |thread|
-			[ thread, $db['posts'].find(:tid => thread['_id']).to_a ]
+		page = params[:captures].first.to_i
+		
+		#Check if page is in valid range
+		if page > $db['threads'].count/$threads_per_page
+			redirect '/board'
+		end
+	
+		threads = $db['threads'].find.skip($threads_per_page*page).limit($threads_per_page).sort('last_post' => -1).to_a.map do |thread|
+			[ thread, $db['posts'].find(:tid => thread['_id']).sort("created_at" => -1).limit($show_posts+1).to_a.reverse ]
 		end
 		
 		threads = threads.select {|x| x[1].size > 0}
@@ -188,7 +204,7 @@ class Board < Sinatra::Base
 										<b>
 								   		<%= first_post['name'] %>
 								   		\| <%= first_post['created_at'].ctime %>
-								   		\| <a href=/board/thread/<%= tid %>>\[Reply\]</a>
+								   		\| <a class = 'reply' href=/board/thread/<%= tid %>>\[ Reply \]</a>
 										</b>
 									<div class='post_txt'><%= first_post['msg'] %></div>
 									</div>
@@ -221,7 +237,7 @@ class Board < Sinatra::Base
 			<div id='submitform'>
 			<center>
 			<p style='font-size: 30px; font-style: italic'>Create new thread</p>
-			<form name='input' action='newthread' method='post'>
+			<form name='input' action='/newthread' method='post'>
 				<table id='inptab'>
 				<tr>
 					<td>Name</td>
@@ -245,7 +261,7 @@ class Board < Sinatra::Base
 			</form>
 			</center>
 			</div>
-			<table>", :locals => {:board_captcha_path => board_captcha_path}) + thread_html +  "</table></body></html>"
+			<table>", :locals => {:board_captcha_path => board_captcha_path}) + thread_html +  "</table>" + gen_page_bar() + "</body></html>"
 		erb code
 	end
 	

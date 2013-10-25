@@ -104,4 +104,22 @@ div.post_txt { font-size: 20px;
            color: #0c1a3f;
            margin-left: 20px;
            padding: 10px;}
+           
+#page_bar {background-color: #97b7e8;
+		   margin: 5px;
+		   margin-top: 20px;
+		   margin-bottom: 30px;
+		   padding: 5px;
+		   -moz-border-radius: 10px;
+           border-radius: 10px;
+           font-size: 25px;}
+           
+a.undec:link {text-decoration: none; color: #0044BB;;}
+a.undec:active {text-decoration: none; color: #0044BB;;}
+a.undec:visited {text-decoration: none; color: #0044BB;}
+a.undec:hover {text-decoration: none; color: #900000;}
 
+a.reply:link {text-decoration: none; color: #0044BB;;}
+a.reply:active {text-decoration: none; color: #0044BB;;}
+a.reply:visited {text-decoration: none; color: #0044BB;}
+a.reply:hover {text-decoration: none; color: #900000;}
