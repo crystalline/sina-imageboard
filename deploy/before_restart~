@@ -39,3 +39,5 @@ run "git clean -x -f -- public/stylesheets public/javascripts"
 run "git clean -d -f -- vendor/plugins"
 
 run "git checkout experimental"
+
+run "git checkout experimental"
