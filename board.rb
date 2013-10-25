@@ -75,7 +75,7 @@ def gen_page_bar
 	
 	ERB.new("<div id='page_bar'>
 		 <% for i in 0..n %>
-		 <a class='undec' href=<%= hrefs[i] %>>[<%= i %>]&nbsp</a>
+		 <a class='undec' href=<%= hrefs[i] %>>[<%= i*10 %>]&nbsp</a>
 		 <% end %>
 		 </div>").result(binding)
 end
