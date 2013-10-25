@@ -14,6 +14,10 @@ $threads_per_page = 10
 $captcha_folder = 'public/captcha/'
 $show_posts = 5
 
+$thumb_side = 300
+$max_file_size = 1100000 #bytes
+$allowed_file_types = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif']
+
 #Init db connection
 mc = MongoClient.new('localhost', 27017)
 
@@ -77,14 +81,134 @@ def gen_page_bar
 		 </div>").result(binding)
 end
 
+def get_image(post)
+	image_code = ""
+	if post["thumb"] and post["thumb"] != "" then
+		image_code = "<a href=#{post['image']}><img style='float:left; margin: 15px;' src=#{post['thumb']}></img></a>"
+	end
+	return image_code
+end
+
 class Board < Sinatra::Base
 	
 	get '/board' do
 		redirect '/board/page/0'
 	end
 	
-	get '/hello' do
-		'nyaaaaaaaaaaa'
+	get '/board/' do
+		redirect '/board/page/0'
+	end
+	
+	get %r{/board/page/([\d]+)} do
+		
+		page = params[:captures].first.to_i
+		
+		#Check if page is in valid range
+		if page > $db['threads'].count/$threads_per_page
+			redirect '/board'
+		end
+		
+		threads = $db['threads'].find.skip($threads_per_page*page).limit($threads_per_page).sort('last_post' => -1).to_a.map do |thread|
+			
+			post_count = $db['posts'].find(:tid => thread['_id']).count()
+			
+			if post_count <= $show_posts+1
+				posts = $db['posts'].find(:tid => thread['_id']).sort("created_at" => 1).to_a
+				first_post = posts[0]
+				last_posts = posts[1..-1]
+			else
+				first_post = $db['posts'].find(:tid => thread['_id']).sort("created_at" => 1).limit(1).to_a.first
+				last_posts = $db['posts'].find(:tid => thread['_id']).sort("created_at" => -1).limit($show_posts).to_a.reverse
+			end
+			
+			{:thread => thread, :post_count => post_count, :first => first_post, :last => last_posts}
+		end
+		
+		threads = threads.select {|x| x[:post_count] > 0}
+		
+	  	board_captcha = $db['global'].find_one({"board_captcha" => true})
+	  	#Regenerate captcha is necessary
+	  	if not board_captcha
+			board_captcha = gen_captcha()
+			$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
+		end
+		board_captcha_path = "/captcha/" + board_captcha["captcha"] + ".jpg"
+		
+		thread_html = ""
+	  	
+		for thread in threads
+
+			first_post = thread[:first]
+			posts = thread[:last]
+			tid = thread[:thread]['_id']
+			
+			thread_html += (erb("<tr><td>
+									<div class='head_post'>
+										<b>
+								   		<%= first_post['name'] %>
+								   		\| <%= first_post['created_at'].ctime %>
+								   		\| <a class = 'reply' href=/board/thread/<%= tid %>>\[ Reply \]</a>
+										</b>
+									<br><%= image_code %><div class='post_txt'><%= first_post['msg'] %></div>
+									</div>
+									</td></tr>", :locals => {:first_post => first_post, :tid => tid, :image_code => get_image(first_post)}))
+				for post in posts
+					
+					thread_html += (erb("<tr><td>
+											<div class='post'>
+												<b>
+												   <%= post['name'] %>
+												   \| <%= post['created_at'].ctime %>
+												</b>
+												<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
+											</div>
+											</td></tr>", :locals => {:post => post, :image_code => get_image(post)}))
+			end
+		end
+
+		code = erb("<html>
+				<head>
+					<title>Rubychan</title>
+					<link href='/ice.css' type='text/css' rel='stylesheet'/>
+					<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+				</head>
+			<body>
+			<div id='header'>
+			Aurelia unlimited
+			</div>
+			<div id='submitform'>
+			<center>
+			<p style='font-size: 30px; font-style: italic'>Create new thread</p>
+			<form name='input' action='/newthread' method='post' enctype='multipart/form-data'>
+				<table id='inptab'>
+				<tr>
+					<td>Name</td>
+					<td><input class='txtin' type='text' name='name' ></td>
+				</tr>
+				<tr>
+					<td>Email</td>
+					<td><input class='txtin' type='text' name='email' ></td>
+				</tr>
+				<tr>
+					<td>Message</td>
+					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
+				</tr>
+				<tr>
+					<td>File</td>
+					<td><input type='file' name='attached_file'></td>
+				</tr>
+				<tr>
+					<td>Captcha</td>
+					<td><input id='captcha' type='text' name='captcha'>
+						<div style='float:right; padding-top:3px; padding-right: 60px;'><img src=<%= board_captcha_path %>></img></div></td>
+				</tr>
+				</table>
+				<input class='button' type='submit' value='Submit'>
+			</form>
+			</center>
+			</div>
+			<table>", :locals => {:board_captcha_path => board_captcha_path}) + thread_html +  "</table>" + gen_page_bar() + "</body></html>"
+		erb code
 	end
 	
 	get '/board/thread/:tid' do
@@ -112,15 +236,16 @@ class Board < Sinatra::Base
 		thread_html = ""
 		
 		for post in posts
+			
 			thread_html += (erb("<tr><td>
 									<div class='post'>
 										<b>
 										   <%= post['name'] %>
 										   \| <%= post['created_at'].ctime %>
 										</b>
-										<div class='post_txt'><%= post['msg'] %></div>
+										<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
 									</div>
-									</td></tr>", :locals => {:post => post}))
+									</td></tr>", :locals => {:post => post, :image_code => get_image(post)}))
 		end
 		
 		thread_html = "<table>" + thread_html + "</table>"
@@ -140,7 +265,7 @@ class Board < Sinatra::Base
 			<div id='submitform'>
 			<center>
 			<p style='font-size: 30px; font-style: italic'>Create new post</p>
-			<form name='input' action=<%= action %> method='post'>
+			<form name='input' action=<%= action %> method='post' enctype='multipart/form-data'>
 				<table id='inptab'>
 				<tr>
 					<td>Name</td>
@@ -153,6 +278,10 @@ class Board < Sinatra::Base
 				<tr>
 					<td>Message</td>
 					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
+				</tr>
+				<tr>
+					<td>File</td>
+					<td><input type='file' name='attached_file'></td>
 				</tr>
 				<tr>
 					<td>Captcha</td>
@@ -166,103 +295,6 @@ class Board < Sinatra::Base
 			</div>", :locals => {:action => action, :thread_captcha_path => thread_captcha_path}) + thread_html + "</body></html>"
 			
 			erb code
-	end
-	
-	get %r{/board/page/([\d]+)} do
-		
-		page = params[:captures].first.to_i
-		
-		#Check if page is in valid range
-		if page > $db['threads'].count/$threads_per_page
-			redirect '/board'
-		end
-	
-		threads = $db['threads'].find.skip($threads_per_page*page).limit($threads_per_page).sort('last_post' => -1).to_a.map do |thread|
-			[ thread, $db['posts'].find(:tid => thread['_id']).sort("created_at" => -1).limit($show_posts+1).to_a.reverse ]
-		end
-		
-		threads = threads.select {|x| x[1].size > 0}
-		
-	  	board_captcha = $db['global'].find_one({"board_captcha" => true})
-	  	#Regenerate captcha is necessary
-	  	if not board_captcha
-			board_captcha = gen_captcha()
-			$db['global'].insert({"board_captcha" => true, "captcha" => board_captcha})
-		end
-		board_captcha_path = "/captcha/" + board_captcha["captcha"] + ".jpg"
-		
-		thread_html = ""
-	  	
-		for thread in threads
-
-			posts = thread[1]
-			first_post = posts[0]
-			tid = thread[0]['_id']
-			
-			thread_html += (erb("<tr><td>
-									<div class='head_post'>
-										<b>
-								   		<%= first_post['name'] %>
-								   		\| <%= first_post['created_at'].ctime %>
-								   		\| <a class = 'reply' href=/board/thread/<%= tid %>>\[ Reply \]</a>
-										</b>
-									<div class='post_txt'><%= first_post['msg'] %></div>
-									</div>
-									</td></tr>", :locals => {:first_post => first_post, :tid => tid}))
-			if posts.size > 1 then
-				for post in posts[1, posts.size-1]
-					thread_html += (erb("<tr><td>
-											<div class='post'>
-												<b>
-												   <%= post['name'] %>
-												   \| <%= post['created_at'].ctime %>
-												</b>
-												<div class='post_txt'><%= post['msg'] %></div>
-											</div>
-											</td></tr>", :locals => {:post => post}))
-				end
-			end
-		end
-
-		code = erb("<html>
-				<head>
-					<title>Rubychan</title>
-					<link href='/ice.css' type='text/css' rel='stylesheet'/>
-					<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
-				</head>
-			<body>
-			<div id='header'>
-			Aurelia unlimited
-			</div>
-			<div id='submitform'>
-			<center>
-			<p style='font-size: 30px; font-style: italic'>Create new thread</p>
-			<form name='input' action='/newthread' method='post'>
-				<table id='inptab'>
-				<tr>
-					<td>Name</td>
-					<td><input class='txtin' type='text' name='name' ></td>
-				</tr>
-				<tr>
-					<td>Email</td>
-					<td><input class='txtin' type='text' name='email' ></td>
-				</tr>
-				<tr>
-					<td>Message</td>
-					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
-				</tr>
-				<tr>
-					<td>Captcha</td>
-					<td><input id='captcha' type='text' name='captcha'>
-						<div style='float:right; padding-top:3px; padding-right: 60px;'><img src=<%= board_captcha_path %>></img></div></td>
-				</tr>
-				</table>
-				<input class='button' type='submit' value='Submit'>
-			</form>
-			</center>
-			</div>
-			<table>", :locals => {:board_captcha_path => board_captcha_path}) + thread_html +  "</table>" + gen_page_bar() + "</body></html>"
-		erb code
 	end
 	
 	post '/board/thread/:tid/newpost' do
@@ -293,6 +325,32 @@ class Board < Sinatra::Base
 		#remove old captcha:
 		FileUtils.rm 'public/captcha/' + thread_captcha_old + '.jpg'
 		
+		#Verify attached file if any
+		if params[:attached_file]
+			if not $allowed_file_types.include? params[:attached_file][:type]
+				redirect '/wrong_type'
+			end
+			if params[:attached_file][:tempfile].size > $max_file_size
+				redirect '/wrong_size'
+			end
+		
+			#Generate filename TODO: unique without random
+			fname = t.to_i.to_s+rand(10000).to_s
+			fext = /\/([a-z]+)/.match(params["attached_file"][:type]).to_s[1..-1]
+			thumb_path = '/image/thumb/' + fname + '.jpg'
+			image_path = '/image/' + fname + '.' + fext
+		
+			#Resize file if necessary
+			img = Magick::Image::read(params[:attached_file][:tempfile].path).first
+			#Write thumb
+			img.resize_to_fit($thumb_side, $thumb_side).write('public' + thumb_path)
+			#Write image
+			FileUtils.cp( params[:attached_file][:tempfile].path, 'public' + image_path )
+		else
+			thumb_path = ""
+			image_path = ""
+		end
+		
 		#Update threads posting date
 		$db['threads'].update({"_id" => tid_bson}, {"$set" => {"last_post" => t}})
 		
@@ -302,15 +360,15 @@ class Board < Sinatra::Base
 		
 		puts "[New post #{t}]"
 		
-		tid = params[:tid]
-		
 		#Create new post document
 		$db['posts'].insert(
 		  :name      => parse_user_text(params[:name]),
 		  :msg       => parse_user_text(params[:msg]),
 		  :email     => parse_user_text(params[:email]),
+		  :thumb	 => thumb_path,
+		  :image	 => image_path,
 		  :created_at => t,
-		  :tid => BSON::ObjectId.from_string(tid)
+		  :tid => tid_bson
 		)
 		
 		#Return back to 
@@ -346,6 +404,30 @@ class Board < Sinatra::Base
 		#remove old captcha:
 		FileUtils.rm 'public/captcha/' + board_captcha_old + '.jpg'
 		
+		#Verify attached file if any
+		if not params[:attached_file]
+			redirect '/nofile'
+		end
+		if not $allowed_file_types.include? params[:attached_file][:type]
+			redirect '/wrong_type'
+		end
+		if params[:attached_file][:tempfile].size > $max_file_size
+			redirect '/wrong_size'
+		end
+		
+		#Generate filename TODO: unique without random
+		fname = t.to_i.to_s+rand(10000).to_s
+		fext = /\/([a-z]+)/.match(params["attached_file"][:type]).to_s[1..-1]
+		thumb_path = '/image/thumb/' + fname + '.jpg'
+		image_path = '/image/' + fname + '.' + fext
+		
+		#Resize file if necessary
+		img = Magick::Image::read(params[:attached_file][:tempfile].path).first
+		#Write thumb
+		img.resize_to_fit($thumb_side, $thumb_side).write('public' + thumb_path)
+		#Write image
+		FileUtils.cp( params[:attached_file][:tempfile].path, 'public' + image_path )
+		
 		puts "[New thread #{t}]"
 		
 		tid = $db['threads'].insert(
@@ -359,6 +441,8 @@ class Board < Sinatra::Base
 		  :name      => parse_user_text(params[:name]),
 		  :msg       => parse_user_text(params[:msg]),
 		  :email     => parse_user_text(params[:email]),
+		  :thumb	 => thumb_path,
+		  :image	 => image_path,
 		  :created_at => t,
 		  :tid => tid
 		)
