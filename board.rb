@@ -344,8 +344,9 @@ class Board < Sinatra::Base
 			#Write thumb
 			img.resize_to_fit($thumb_side, $thumb_side).write('public' + thumb_path)
 			#Write image
-			fs_path = params[:attached_file][:tempfile].path, 'public' + image_path 
-			FileUtils.cp( fs_path )
+			temp_path = params[:attached_file][:tempfile].path
+			fs_path = 'public' + image_path 
+			FileUtils.cp( temp_path, fs_path )
 			FileUtils.chmod( 0644, fs_path )
 		else
 			thumb_path = ""
@@ -427,8 +428,9 @@ class Board < Sinatra::Base
 		#Write thumb
 		img.resize_to_fit($thumb_side, $thumb_side).write('public' + thumb_path)
 		#Write image
-		fs_path = params[:attached_file][:tempfile].path, 'public' + image_path 
-		FileUtils.cp( fs_path )
+		temp_path = params[:attached_file][:tempfile].path
+		fs_path = 'public' + image_path 
+		FileUtils.cp( temp_path, fs_path )
 		FileUtils.chmod( 0644, fs_path )
 		
 		puts "[New thread #{t}]"
