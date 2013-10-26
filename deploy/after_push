@@ -13,6 +13,8 @@ umask 002
 
 git submodule sync && git submodule update --init --recursive
 
+echo `whoami`
+
 source ~/.profile
 
 run deploy/before_restart
