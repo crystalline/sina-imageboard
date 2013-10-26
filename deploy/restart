@@ -4,5 +4,5 @@ echo "Restarting unicorn"
 cd /apps/rubyboard
 unset GIT_DIR
 
-aurelia cat tmp/pids/unicorn.pid | xargs kill -QUIT
-aurelia unicorn -c unicorn.rb -D
+cat tmp/pids/unicorn.pid | xargs kill -QUIT
+unicorn -c unicorn.rb -D
