@@ -4,6 +4,7 @@ require 'mongo'
 require 'RMagick'
 require 'digest/md5'
 require 'fileutils'
+require 'uri'
 include Mongo
 
 #Global settings
@@ -16,6 +17,7 @@ $show_posts = 5
 $thumb_side = 300
 $max_file_size = 1100000 #bytes
 $allowed_file_types = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif']
+$uri_regexp = URI.regexp(['http','https'])
 
 #Init db connection
 mc = MongoClient.new('localhost', 27017)
@@ -64,8 +66,12 @@ def gen_captcha
 	return hashed
 end
 
+def transform_URIs(str)
+    str.gsub($uri_regexp) { |capture| "<a href="+capture+">"+capture+"</a>" }
+end
+
 def parse_user_text(str)
-	str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>')
+	transform_URIs(str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>'))
 end
 
 def gen_page_bar
