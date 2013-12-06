@@ -50,16 +50,39 @@ def rebuild_global
 end
 
 def get_next_id
-	val = $db['global'].find_and_modify(
+	return $db['global'].find_and_modify(
 		{
 			"query" => { "_id" => "counter" },
 			"update" => { "$inc" => { "counter" => 1 } },
 			"new" => true
 		}
-	)
-	
-	puts val.to_s
-	
+	)['counter']
+end
+
+def rebuild_post_numbers
+    
+    #reset counter
+    $db['global'].update({"_id" => "counter"}, {'$set' => {'counter' => 0}})
+    
+    #get all posts
+    posts = $db['posts'].find().sort('created_at' => 1).to_a
+    
+    #Recalculate posts' number
+    posts.each do |p|
+        next_num = get_next_id()
+        p next_num
+        $db['posts'].update({'_id'=>p['_id']}, {'$set' => {'num' => next_num}})
+    end
+    
+    #Recalculate thread number
+    threads = $db['threads'].find().to_a
+    threads.each do |thr|
+        first_post = $db['posts'].find(:tid => thr['_id']).sort("created_at" => 1).limit(1).to_a.first
+        if first_post then
+            $db['threads'].update({'_id'=>thr['_id']}, {'$set' => {'num' => first_post['num']}})
+        end
+    end
+    puts "Post numbers rebuild complete\n"
 end
 
 def rebuild_board_captcha

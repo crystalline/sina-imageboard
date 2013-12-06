@@ -26,7 +26,6 @@ mc = MongoClient.new('localhost', 27017)
 $db = mc.db($db_name)
 
 #Create sequence marker if not present (to label posts in order)
-
 counter = $db['global'].find_one("_id" => "counter")
 if not counter
 	$db['global'].insert("_id" => "counter", "counter" => 1)
@@ -39,7 +38,7 @@ def get_next_id
 			"update" => { "$inc" => { "counter" => 1 } },
 			"new" => true
 		}
-	)
+	)['counter']
 end
 
 #simple captcha generator
@@ -70,8 +69,14 @@ def transform_URIs(str)
     str.gsub($uri_regexp) { |capture| "<a href="+capture+">"+capture+"</a>" }
 end
 
+def transform_post_links(str)
+    str.gsub(/&gt&gt[\d]+/) { |capture|
+        id = capture[6..-1]
+        "<a href=\"\#"+id+"\" class='internal-link'>"+"&gt&gt"+id+"</a>" }
+end
+
 def parse_user_text(str)
-	transform_URIs(str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>'))
+	transform_URIs(transform_post_links(str.gsub('<', '&lt').gsub('>', '&gt').gsub("\n", '<br>')))
 end
 
 def gen_page_bar
@@ -146,24 +151,27 @@ class Board < Sinatra::Base
 			first_post = thread[:first]
 			posts = thread[:last]
 			tid = thread[:thread]['_id']
+			tnum = thread[:thread]['num']
 			
 			thread_html += (erb("<tr><td>
-									<div class='head_post'>
+									<div class='head_post' id=\"<%= first_post['num'].to_s %>\">
 										<b>
 								   		<%= first_post['name'] %>
 								   		\| <%= first_post['created_at'].ctime %>
-								   		\| <a class = 'reply' href=/board/thread/<%= tid %>>\[ Reply \]</a>
+								   		\| <a class='post_num' onclick='insert(<%= '\">>'+first_post['num'].to_s+'\"' %>)'>No.<%= first_post['num'].to_s %></a>
+								   		\| <a class = 'reply' href=/board/thread/<%= tnum %>>\[ Reply \]</a>
 										</b>
 									<br><%= image_code %><div class='post_txt'><%= first_post['msg'] %></div>
 									</div>
-									</td></tr>", :locals => {:first_post => first_post, :tid => tid, :image_code => get_image(first_post)}))
+									</td></tr>", :locals => {:first_post => first_post, :tnum => tnum, :image_code => get_image(first_post)}))
 				for post in posts
 					
 					thread_html += (erb("<tr><td>
-											<div class='post'>
+											<div class='post' id=\"<%= post['num'].to_s %>\">
 												<b>
 												   <%= post['name'] %>
 												   \| <%= post['created_at'].ctime %>
+												   \| <a class='post_num' onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
 												</b>
 												<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
 											</div>
@@ -174,8 +182,9 @@ class Board < Sinatra::Base
 		code = erb("<html>
 				<head>
 					<title>Rubychan</title>
-					<link href='/ice.css' type='text/css' rel='stylesheet'/>
 					<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+					<link href='/ice.css' type='text/css' rel='stylesheet'/>
+					<script type='text/javascript' src='/sina.js'></script>
 				</head>
 			<body>
 			<div id='header'>
@@ -196,7 +205,7 @@ class Board < Sinatra::Base
 				</tr>
 				<tr>
 					<td>Message</td>
-					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
+					<td><textarea class='txtin' id ='msg_text' name='msg' rows='10' ></textarea></td>
 				</tr>
 				<tr>
 					<td>File</td>
@@ -216,15 +225,16 @@ class Board < Sinatra::Base
 		erb code
 	end
 	
-	get '/board/thread/:tid' do
-		
-		tid = params[:tid]
-		tid_bson = BSON::ObjectId.from_string(tid)
-		thread = $db['threads'].find_one(:_id => tid_bson)
+	get '/board/thread/:tnum' do
+	    tnum = params[:tnum].to_i
+		thread = $db['threads'].find_one(:num => tnum)
 		
 		if not thread
 			redirect '/no_thread'
 		end
+		
+		tid = thread['_id'].to_s
+		tid_bson = thread['_id']
 		
 		thread_captcha = thread['captcha']
 		
@@ -236,17 +246,18 @@ class Board < Sinatra::Base
 		
 		thread_captcha_path = "/captcha/" + thread_captcha + ".jpg"
 		
-		posts = $db['posts'].find(:tid => tid_bson).to_a
+		posts = $db['posts'].find(:tid => tid_bson).sort("created_at" => 1).to_a
 		
 		thread_html = ""
 		
 		for post in posts
 			
 			thread_html += (erb("<tr><td>
-									<div class='post'>
+									<div class='post' id=\"<%= post['num'].to_s %>\">
 										<b>
 										   <%= post['name'] %>
 										   \| <%= post['created_at'].ctime %>
+										   \| <a class='post_num' onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
 										</b>
 										<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
 									</div>
@@ -255,13 +266,14 @@ class Board < Sinatra::Base
 		
 		thread_html = "<table>" + thread_html + "</table>"
 		
-		action = "/board/thread/#{tid}/newpost"
+		action = "/board/thread/#{tnum}/newpost"
 		
 		code = erb("<html>
 				<head>
 					<title>Rubychan</title>
-					<link href='/ice.css' type='text/css' rel='stylesheet'/>
 					<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+					<link href='/ice.css' type='text/css' rel='stylesheet'/>
+					<script type='text/javascript' src='/sina.js'></script>
 				</head>
 			<body>
 			<div id='header'>
@@ -282,7 +294,7 @@ class Board < Sinatra::Base
 				</tr>
 				<tr>
 					<td>Message</td>
-					<td><textarea class='txtin' name='msg' rows='10' ></textarea></td>
+					<td><textarea class='txtin' id ='msg_text' name='msg' rows='10' ></textarea></td>
 				</tr>
 				<tr>
 					<td>File</td>
@@ -302,7 +314,7 @@ class Board < Sinatra::Base
 			erb code
 	end
 	
-	post '/board/thread/:tid/newpost' do
+	post '/board/thread/:tnum/newpost' do
 		t = Time.now
 		
 		#Check if post is empty
@@ -311,11 +323,12 @@ class Board < Sinatra::Base
 		    redirect '/empty_post'
 		end
 		
-		tid = params[:tid]
-		tid_bson = BSON::ObjectId.from_string(tid)
-		thread = $db['threads'].find_one(:_id => tid_bson)
-		thread_captcha = thread['captcha']
-		
+		tnum = params[:tnum].to_i
+		thread = $db['threads'].find_one(:num => tnum)
+		tid = thread['_id'].to_s
+		tid_bson = thread['_id']
+   		thread_captcha = thread['captcha']
+   		
 		#Verify captcha
 		if Digest::MD5.hexdigest(params[:captcha]) != thread_captcha
 			redirect '/wrong_captcha'
@@ -368,6 +381,8 @@ class Board < Sinatra::Base
 		
 		puts "[New post #{t}]"
 		
+		post_number = get_next_id()
+		
 		#Create new post document
 		$db['posts'].insert(
 		  :name      => parse_user_text(params[:name]),
@@ -376,11 +391,12 @@ class Board < Sinatra::Base
 		  :thumb	 => thumb_path,
 		  :image	 => image_path,
 		  :created_at => t,
-		  :tid => tid_bson
+		  :tid => tid_bson,
+		  :num => post_number
 		)
 		
 		#Return back to 
-		redirect "/board/thread/#{tid}"
+		redirect "/board/thread/#{tnum}"
 
 	end
 	
@@ -441,10 +457,13 @@ class Board < Sinatra::Base
 		
 		puts "[New thread #{t}]"
 		
+		post_number = get_next_id()
+		
 		tid = $db['threads'].insert(
 		  :created_at => t,
 		  :last_post => t,
-		  :captcha => gen_captcha()
+		  :captcha => gen_captcha(),
+		  :num => post_number
 		)
 		
 		#Create new post document
@@ -455,13 +474,13 @@ class Board < Sinatra::Base
 		  :thumb	 => thumb_path,
 		  :image	 => image_path,
 		  :created_at => t,
-		  :tid => tid
+		  :tid => tid,
+		  :num => post_number
 		)
 		
 		#Return back to 
 		redirect '/board'
 	end
-
 end
 
 
