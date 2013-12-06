@@ -276,9 +276,11 @@ class Board < Sinatra::Base
 					<script type='text/javascript' src='/sina.js'></script>
 				</head>
 			<body>
+			<a href='/board' class='undec'>
 			<div id='header'>
-			<a href='/board'>Aurelia unlimited</a>
+			Aurelia unlimited
 			</div>
+			</a>
 			<div id='submitform'>
 			<center>
 			<p style='font-size: 30px; font-style: italic'>Create new post</p>
