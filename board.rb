@@ -277,7 +277,7 @@ class Board < Sinatra::Base
 				</head>
 			<body>
 			<div id='header'>
-			Aurelia unlimited
+			<a href='/board'>Aurelia unlimited</a>
 			</div>
 			<div id='submitform'>
 			<center>
