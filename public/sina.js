@@ -39,3 +39,10 @@ function highlight(post)
 	return true;
 }
 
+window.onload=function(e)
+{
+	var match;
+
+	if(match=/#([0-9]+)/.exec(document.location.toString()))
+        insert(">>"+match[1]);
+}

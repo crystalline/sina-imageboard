@@ -158,7 +158,7 @@ class Board < Sinatra::Base
 										<b>
 								   		<%= first_post['name'] %>
 								   		\| <%= first_post['created_at'].ctime %>
-								   		\| <a class='post_num' href='/board/thread/<%= tnum %>#'
+								   		\| <a class='post_num' href='/board/thread/<%= tnum %>#<%= tnum %>'
 								   		      onclick='insert(<%= '\">>'+first_post['num'].to_s+'\"' %>)'>No.<%= first_post['num'].to_s %></a>
 								   		\| <a class = 'reply' href='/board/thread/<%= tnum %>'>\[ Reply \]</a>
 										</b>
@@ -172,7 +172,8 @@ class Board < Sinatra::Base
 												<b>
 												   <%= post['name'] %>
 												   \| <%= post['created_at'].ctime %>
-												   \| <a class='post_num' href='/board/thread/<%= tnum %>' onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
+												   \| <a class='post_num' href='/board/thread/<%= tnum %>#<%= tnum %>'
+												         onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
 												</b>
 												<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
 											</div>
@@ -258,7 +259,7 @@ class Board < Sinatra::Base
 										<b>
 										   <%= post['name'] %>
 										   \| <%= post['created_at'].ctime %>
-										   \| <a class='post_num' onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
+										   \| <a class='post_num' href='#<%= post['num'] %>'onclick='insert(<%= '\">>'+post['num'].to_s+'\"' %>)'>No.<%= post['num'].to_s %></a>
 										</b>
 										<br><%= image_code %><div class='post_txt'><%= post['msg'] %></div>
 									</div>
