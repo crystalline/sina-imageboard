@@ -119,6 +119,11 @@ a.undec:active {text-decoration: none; color: #0044BB;;}
 a.undec:visited {text-decoration: none; color: #0044BB;}
 a.undec:hover {text-decoration: none; color: #900000;}
 
+a.post_num:link {text-decoration: none; color: #0044BB;;}
+a.post_num:active {text-decoration: none; color: #0044BB;;}
+a.post_num:visited {text-decoration: none; color: #0044BB;}
+a.post_num:hover {text-decoration: none; color: #900000;}
+
 a.reply:link {text-decoration: none; color: #0044BB;;}
 a.reply:active {text-decoration: none; color: #0044BB;;}
 a.reply:visited {text-decoration: none; color: #0044BB;}
